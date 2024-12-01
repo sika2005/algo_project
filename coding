@@ -1,0 +1,338 @@
+from IPython.display import display, Image, clear_output
+import ipywidgets as widgets
+from google.colab import files
+import pandas as pd
+import re
+
+
+
+# Upload the file and load the specific sheet as the initial DataFrame
+uploaded = files.upload()
+df = pd.read_excel(next(iter(uploaded)), sheet_name="Notes Upload")  # Load 'Notes Upload' sheet
+print("Loaded 'Notes Upload' sheet successfully.")
+# Standardize column names
+df.columns = df.columns.str.strip()
+display(df)
+
+
+
+def welcome():
+
+    # Welcomes the user to NoteHub and prompts for sign-in with email and password validation.
+    print("Welcome to NoteHub!")
+    print("")
+    print("Please sign in with your IE Connects to continue.")
+    print("")
+
+    # Prompt for email with basic validation
+    while True:
+        email = input("Please enter your email: ")
+        print("")
+        if email.endswith("@student.ie.edu") and "ieu202" in email:
+            break
+        print("Invalid email. Please use the format: '...ieu202x@student.ie.edu'.")
+
+    # Prompt for password and welcomes user if he is signed in successfully
+    password = input("Please enter your password: ")
+    print("")
+    print("")
+    print("Sign-in successful!")
+    print("")
+    print("")
+    print("We will now take you to the portal menu")
+
+
+def choose_portal():  # Function for Choosing Accessor or Uploader
+    print("Welcome to the Main Menu!\n")
+    print("Here you can choose your portal:")
+    print("1. Uploader - You are going to upload your notes.")
+    print("2. Accessor - You want to access notes.\n")
+
+    # Dropdown menu for portal selection
+    portal_dropdown = widgets.Dropdown(
+        options=[('Choose option', ''), ('Uploader', 'u'), ('Accessor', 'a')],
+        description='Select:',
+        disabled=False,
+    )
+
+    # Display the dropdown
+    display(portal_dropdown)
+
+    # New function to execute based on choice
+    def on_portal_change(change):
+        if change['new'] == 'u':
+            print("\nYou have chosen to upload notes, you will be taken to the uploader portal now")
+
+        elif change["new"] == "a":
+            print("\nYou have chosen to access notes, you will be taken to the accessor portal now")
+            notes_feedback_system(df)
+
+    # For changes in the dropdown selection
+    portal_dropdown.observe(on_portal_change, names='value')
+
+
+
+def notes_feedback_system(df):
+    #This function creates a system for filtering data based on professor, subject, and year and collects user feedback on notes using widgets.
+
+    # Dropdown options
+    professors = df['Course Professor'].unique()
+    subjects = df['Course Name'].unique()
+    year_options = sorted(df['Year'].unique())
+
+    # Create dropdown menus for professors, subjects, and years
+    professor_dropdown = widgets.Dropdown(options=[""] + list(professors), description='Professor:')
+    subject_dropdown = widgets.Dropdown(options=[""] + list(subjects), description='Subject:')
+    year_dropdown = widgets.Dropdown(options=[""] + list(year_options), description='Year:')
+
+    # Feedback widgets
+    notes_text = widgets.Text(description="Notes Link:")
+    rating_slider = widgets.IntSlider(value=3, min=1, max=5, step=1, description="Rating:")
+    submit_button = widgets.Button(description="Submit Feedback")
+    feedback_output = widgets.Output()
+
+    # Display dropdown widgets
+    display(professor_dropdown, subject_dropdown, year_dropdown)
+
+    # Function to implement Quick Sort
+    def quick_sort(data, key, reverse=False):
+        if len(data) <= 1:
+            return data
+
+        # Choose pivot (middle element)
+        pivot = data[len(data) // 2]
+        pivot_value = pivot[key]
+
+        # Partition the data
+        if reverse:
+            left = [x for x in data if x[key] > pivot_value]
+            middle = [x for x in data if x[key] == pivot_value]
+            right = [x for x in data if x[key] < pivot_value]
+        else:
+            left = [x for x in data if x[key] < pivot_value]
+            middle = [x for x in data if x[key] == pivot_value]
+            right = [x for x in data if x[key] > pivot_value]
+
+        # Recursively sort left and right partitions
+        return quick_sort(left, key, reverse) + middle + quick_sort(right, key, reverse)
+
+    # Function to filter, sort, and print data
+    def search_and_print_by_ranking(professor=None, subject=None, year=None):
+        # Filter the DataFrame based on professor, ensuring case insensitivity and stripping spaces
+        professor_filter = df[df['Course Professor'].str.strip().str.lower() == professor.lower().strip()]
+
+
+        filtered_data = []
+
+        for _, row in professor_filter.iterrows():
+            # Apply the filter conditions with case insensitivity and space stripping
+            if subject and row['Course Name'].strip().lower() != subject.lower().strip():
+                continue
+            if year and row['Year'] != int(year):
+                continue
+
+            # Append the row to the filtered data
+            filtered_data.append(row)
+
+        # If no rows match the criteria
+        if not filtered_data:
+            print(f"No matching courses found for professor {professor}, subject {subject}, and year {year}")
+            return
+
+        # Sort the filtered data by 'Ranking' in descending order using Quick Sort, from the function we made earlier
+        filtered_data = quick_sort(filtered_data, key='Ranking', reverse=True)
+
+        # Print only the 'Ranking' and 'Notes' columns for the filtered and sorted data
+        print(f"Filtered and Sorted Data (Ranking and Notes):")
+        for row in filtered_data:
+            print(f"Ranking: {row['Ranking']}, Notes: {row['Notes']}")
+
+        # Call the feedback function using widgets
+        get_notes_rating()
+
+
+    # Function to collect notes rating using widgets
+    def get_notes_rating():
+        print("")
+        print("We hope you are satisfied with the notes you received!")
+        print("")
+        print("We would like you to give the notes you used a rating of 1-5.")
+        print("")
+
+        # Display feedback widgets
+        display(notes_text, rating_slider, submit_button, feedback_output)
+
+    # Function to handle feedback submission
+    def submit_feedback(change):
+        with feedback_output:
+            clear_output()
+            print("Thank you for your feedback!")
+            print("")
+            print(f"Notes Link: {notes_text.value}")
+            print(f"Rating: {rating_slider.value}")
+            print("Click the logo in the top left corner to access more features or search for new notes!")
+
+    # Attach feedback submission function to the button
+    submit_button.on_click(submit_feedback)
+
+    # Function to update the data based on widget values
+    def update_results(change):
+        selected_professor = professor_dropdown.value
+        selected_subject = subject_dropdown.value
+        selected_year = year_dropdown.value
+
+        # Ensure all dropdowns have been selected
+        if not selected_professor or not selected_subject or not selected_year:
+            return  # Do nothing until all dropdowns have values
+
+        # Process the search once all dropdowns are filled
+        search_and_print_by_ranking(professor=selected_professor, subject=selected_subject, year=selected_year)
+
+    # Attach the update function to each widget's value change
+    professor_dropdown.observe(update_results, names='value')
+    subject_dropdown.observe(update_results, names='value')
+    year_dropdown.observe(update_results, names='value')
+
+# Code needed to use the uploader profile
+
+# Predefined lists of professors and subjects
+professors = [
+    "Paloma Martinez de Velasco Helain", "Lorena Morena Díez", "Borja Mesa Sánchez",
+    "Pablo Monfort Vinuesa", "Joshua Jorg Gujer", "Chris Atanasov Kostov",
+    "Almudena Rodriguez Tarodo", "David Santos Velasco", "Sara Farooqi",
+    "Borja Paredes Sansienea", "Ana Maria Glavan", "Dae-Jin Lee",
+    "Javier Castellar Aldamiz-Echevarria", "Carlina Conrad Cloppenburg",
+    "Antonio López Rosell", "Rafif Srour Daher", "Rafael Ballester Ripoll",
+    "Alejandro Martínez Mingo", "Alexandre Anahory de Sena Antunes Simões",
+    "Robert David Polding", "Juan Garbayo de Pablo"
+]
+
+subjects = [
+    "COMMUNICATION SKILLS", "FUNDAMENTALS OF HUMAN BEHAVIOR", "FUNDAMENTALS OF PROBABILITY AND STATISTICS",
+    "INTRODUCTON TO PROGRAMMING FOR DATA SCIENCE", "LEARNING TO OBSERVE, EXPERIMENT AND SURVEY",
+    "THE BIG HISTORY OF IDEAS AND INNOVATION", "MATH 0.1: CALCULUS", "COMPUTATIONAL THINKING FOR DATA MANAGEMENT AND ANALYSIS",
+    "DATA INSIGHTS AND VISUALIZATION", "FUNDAMENTALS OF DATA ANALYSIS", "PROFESSIONAL BOOTCAMP: LEADERSHIP",
+    "SIMULATING AND MODELING TO UNDERSTAND CHANGE", "ALGORITHMS & DATA STRUCTURES",
+    "MATHEMATICS FOR DATA MANAGEMENT AND ANALYSIS", "PROBABILITY & STATISTICS FOR DATA MANAGEMENT AND ANALYSIS",
+    "PROGRAMMING FOR DATA MANAGEMENT & ANALYSIS", "TIME SERIES ANALYSIS"
+]
+
+
+# Function to upload and validate file type
+def student_upload_files():
+    print("\nPlease upload your grade document for verification. Acceptable formats: '.png', '.jpg', '.jpeg', '.pdf'.")
+    uploaded_files = files.upload()
+
+    valid_files = {}
+    for filename, content in uploaded_files.items():
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+            print(f"Uploaded {filename} successfully.")
+            if filename.lower().endswith('.pdf'):
+                print("PDF cannot be displayed.")
+            else:
+                display(Image(content))
+            valid_files[filename] = content
+        else:
+            print(f"Uploaded {filename} is not an acceptable file type.")
+
+    if not valid_files:
+        print("No acceptable documents were uploaded. Please upload the correct file type.")
+    return valid_files
+
+# Function to review uploaded files and set eligibility
+def review_files(uploaded_files):
+    print("\nAdministrator: Please review the documents uploaded by the student for eligibility verification.")
+    for filename, content in uploaded_files.items():
+        print(f"\nDocument {filename} uploaded successfully. Please review it to verify the student's grade.")
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            display(Image(content))
+        admin_input = input("Administrator, is the student eligible to upload notes? (yes/no): ").strip().lower()
+        if admin_input == 'yes':
+            print("The student is eligible. Proceeding to collect additional inputs...")
+            return True
+        else:
+            print("The student is not eligible to upload notes. Process terminated.")
+            return False
+
+# Function to collect additional inputs from eligible students
+def collect_inputs():
+    print("\nPlease provide additional information for note uploading.")
+
+    # Widgets for input collection
+    year_choices = widgets.RadioButtons(options=['1', '2'], description='Academic Year:')
+    professor_dropdown = widgets.Dropdown(options=professors, description='Professor:')
+    subject_dropdown = widgets.Dropdown(options=subjects, description='Subject:')
+    doc_link_input = widgets.Text(description='Doc Link:')
+    email_input = widgets.Text(description='IE Mail:')
+    confirm_button = widgets.Button(description="Confirm Selections")
+    output = widgets.Output()
+
+    # Callback function to handle confirmation
+    def confirm_inputs(b):
+        with output:
+            output.clear_output()
+            doc_link = doc_link_input.value
+            if not re.match(r'^https?://docs\.google\.com/', doc_link):
+                print("Invalid link. Please ensure your link is a valid Google Doc URL.")
+            else:
+                user_inputs = {
+                    'academic_year': '1' if year_choices.value == '1' else '2',
+                    'professor': professor_dropdown.value,
+                    'subject': subject_dropdown.value,
+                    'doc_link': doc_link,
+                    'student_email': email_input.value
+                }
+                print("Inputs confirmed:", user_inputs)
+                update_dataframe(user_inputs)  # Update the DataFrame with new inputs
+
+    confirm_button.on_click(confirm_inputs)
+    display(year_choices, professor_dropdown, subject_dropdown, doc_link_input, email_input, confirm_button, output)
+
+# Function to update the existing DataFrame
+def update_dataframe(user_inputs):
+    global df  # Use the global DataFrame loaded from the Excel file
+    try:
+        # Create a new row with user inputs
+        new_row = pd.DataFrame([{
+            'Course Name': user_inputs['subject'],
+            'Course Professor': user_inputs['professor'],
+            'Year': user_inputs['academic_year'],
+            'Student ID': user_inputs['student_email'],
+            'Notes': user_inputs['doc_link'],
+            'Ranking': ''  # Default empty value
+        }])
+
+        # Append the new row to the DataFrame
+        df = pd.concat([df, new_row], ignore_index=True)
+        print("\nRow added successfully. Updated data:")
+        display(df)  # Display the updated DataFrame
+
+    except Exception as e:
+        print(f"Error while updating the DataFrame: {e}")
+
+
+def main1():
+    uploaded_files = student_upload_files()  # Step 1: File upload
+    if uploaded_files:
+        eligible = review_files(uploaded_files)  # Step 2: Eligibility review
+        if eligible:
+            collect_inputs()  # Step 3: Collect additional inputs
+        else:
+            print("Process terminated due to ineligibility. Ensure your files meet the required criteria.")
+    else:
+        print("No valid documents were uploaded for verification. Please try uploading again.")
+
+    print("Thank you for using NoteHub! To return to the main portal, press the NoteHub logo. From there, you can also choose to view notes from other high-grading students.")
+
+
+
+
+welcome()
+choose_portal()
+#Run main1() when you want to access the notes uploader portal on Google Colab.
+#Since Google Colab handles user inputs differently from local environments like
+#PyCharm, executing functions that require user input can be tricky. To prevent
+#delays and unexpected behavior, main1() is set up to run alone. This ensures
+#smoother input handling and a more stable user experience.
+main1()
+
